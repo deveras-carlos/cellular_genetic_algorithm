@@ -25,7 +25,7 @@ OBJECTS  = \
 		$(SOURCE)/genetic_algorithm.c
 BUILD_DIR= ./
 
-LIBS = -fopenmp
+LIBS = -fopenmp -lm
 
 CFLAGS  += $(LIBS)
 

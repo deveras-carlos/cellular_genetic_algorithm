@@ -3,25 +3,29 @@
 
 #define READING 0
 #define WRITING 1
-#define SWITCH( i ) ( P.individuals[ i ].RW_type = !P.individuals[ i ].RW_type )
 
-#define MAX_GENES 10
-#define ROWS 6
-#define COLS 4
+#define MAX_GENES 100
+#define ROWS 12
+#define COLS 8
 #define MAX_POPULATION ROWS * COLS
 #define AMT_NEIGHBORS 4
-#define MAX_GEN 1000
+#define MAX_GEN 10000
+
+#define PREBATI (rand()%101/100.F)
+#define LOWER_BOUND -5.12F
+#define UPPER_BOUND 5.12F
+#define XALPHA  0.25
 
 #ifdef GENETIC_ALGORITHM_C
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <math.h>
 #include <string.h>
+#include <math.h>
 #include <omp.h>
 
 typedef struct _chromossome_ {
-    double genes[MAX_GENES];
+    double* genes;
     unsigned int neighbors[ AMT_NEIGHBORS ];
     double fitness;
     char RW_type; // Reading and Writing type - 0 for Reading, 1 for Writing
