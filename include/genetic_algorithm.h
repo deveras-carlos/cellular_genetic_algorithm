@@ -4,8 +4,8 @@
 #define FALSE 0
 #define TRUE 1
 
-#define MAX_GENES 1000
-#define ROWS 12
+#define MAX_GENES 10000
+#define ROWS 10
 #define COLS 4
 #define MAX_POPULATION ROWS * COLS
 #define AMT_NEIGHBORS 4
@@ -14,8 +14,9 @@
 #define PREBATI (rand()%101/100.F)
 #define LOWER_BOUND -5.12F
 #define UPPER_BOUND 5.12F
-#define XALPHA  0.3
+#define XALPHA  0.35
 
+#define TOURNAMENT_SIZE 3
 #define MAX_ITER_LOCAL_SEARCH 10
 
 #ifdef GENETIC_ALGORITHM_C

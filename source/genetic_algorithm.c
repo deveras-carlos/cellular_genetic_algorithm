@@ -15,7 +15,7 @@ float randgen(float lower_limit, float upper_limit)
 double sample_fitness( double* genes, int n ){
     register int i;
     double sum = 100;
-    for ( i = 0; i< n; i++ )
+    for ( i = 0; i < n; i++ )
         sum += pow( genes[i], 2 );
 
     return sum;
@@ -76,6 +76,21 @@ void start_population(
     population->equals = 0;
 }
 
+int tournament_selection(Population* population, int individual, int tournament_size) {
+    int best = -1;
+    double best_fitness = INFINITY; // Assuming lower fitness is better
+    for (int i = 0; i < tournament_size; i++) {
+        int rand_index = rand() % AMT_NEIGHBORS;
+        int neighbor = population->reading_individuals[individual].neighbors[ rand_index ];
+        double fitness = population->reading_individuals[neighbor].fitness;
+        if (fitness < best_fitness) {
+            best = rand_index;
+            best_fitness = fitness;
+        }
+    }
+    return best;
+}
+
 int fix_unfeasible( double* xr, double lower_limit, double upper_limit ){
     if ( ( *xr ) > upper_limit )
         *xr = upper_limit - PREBATI * ( ( *xr ) - upper_limit ) / ( ( *xr ) - lower_limit );
@@ -101,11 +116,11 @@ void blend_crossover( Population* population, int father, int mother, int son, f
 }
 
 void downhill_local_search(
-    Chromossome* individual, int individual_size,
+    Chromossome* individual, int individual_size, int step,
     double (*fitness_function)(double*, int), double lower_limit, double upper_limit
 ){
     int i;
-    double step_size = 0.01; // Step size for tweaking genes
+    double step_size = 0.01 - 0.0001 * ( double ) step; // Step size for tweaking genes
     double new_fitness, original_fitness = individual->fitness;
 
     for (i = 0; i < individual_size; i++) {
@@ -140,6 +155,8 @@ void downhill_local_search(
 }
 
 void genetic_algorithm(  ){
+    clock_t start, end;
+
     Population population;
     int pa1, pa2;
     double fit, dvp, med, gene;
@@ -148,7 +165,7 @@ void genetic_algorithm(  ){
 
     double *auxiliar_genes;
 
-    int num_threads = 4;
+    int num_threads = 40;
 
     srand((unsigned) time(0));
 
@@ -175,7 +192,8 @@ void genetic_algorithm(  ){
     }
 
     printf( "\n\nThe best is %d with fitness equals to %.4f\n", population.best, population.reading_individuals[ population.best ].fitness );
-
+    
+    start = clock();
     do {
 
         #pragma omp parallel for num_threads( num_threads ) \
@@ -187,9 +205,14 @@ void genetic_algorithm(  ){
                     population.reading_individuals[ i ].genes[ j ] = gene;
                     population.writing_individuals[ i ].genes[ j ] = gene;
                 }
+
+                fit = sample_fitness( population.reading_individuals[ i ].genes, population.individual_size );
+                population.writing_individuals[ i ].fitness = population.reading_individuals[ i ].fitness = fit;
             } else {
                 pa1 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
                 pa2 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
+                // pa1 = tournament_selection(&population, i, TOURNAMENT_SIZE);
+                // pa2 = tournament_selection(&population, i, TOURNAMENT_SIZE - 1);
 
                 if ( pa1 != pa2 ){
                     blend_crossover( &population, pa1, pa2, i, XALPHA );
@@ -221,7 +244,8 @@ void genetic_algorithm(  ){
             for ( j = 0; j < MAX_ITER_LOCAL_SEARCH; j++ )
                 downhill_local_search(
                     &(population.reading_individuals[i]), 
-                    population.individual_size, 
+                    population.individual_size,
+                    generation,
                     sample_fitness, 
                     LOWER_BOUND, 
                     UPPER_BOUND
@@ -229,9 +253,13 @@ void genetic_algorithm(  ){
         }
 
         generation++;
-        printf( "Evaluated individuals %d\n", cfo );
-        printf( "Generation number %d\n", generation );
+        // printf( "Evaluated individuals %d\n", cfo );
+        // printf( "Generation number %d\n", generation );
     } while ( cfo < MAX_GEN );
+
+    end = clock();
+
+    printf("\n\tExecutado em tempo = %.4f,CFO=%d ", (double) ( (end - start) / (CLOCKS_PER_SEC*num_threads) ), cfo);
 
     for ( i = 0; i < population.population_size; i++ ){
         printf( "\n\tIndividual (%d) = %.10f | %d", i, population.reading_individuals[ i ].fitness, population.reading_individuals[ i ].sels );
