@@ -1,12 +1,12 @@
 #ifndef GENETIC_ALGORITHM_H
 #define GENETIC_ALGORITHM_H
 
-#define READING 0
-#define WRITING 1
+#define FALSE 0
+#define TRUE 1
 
-#define MAX_GENES 100
+#define MAX_GENES 1000
 #define ROWS 12
-#define COLS 8
+#define COLS 4
 #define MAX_POPULATION ROWS * COLS
 #define AMT_NEIGHBORS 4
 #define MAX_GEN 10000
@@ -14,7 +14,9 @@
 #define PREBATI (rand()%101/100.F)
 #define LOWER_BOUND -5.12F
 #define UPPER_BOUND 5.12F
-#define XALPHA  0.25
+#define XALPHA  0.3
+
+#define MAX_ITER_LOCAL_SEARCH 10
 
 #ifdef GENETIC_ALGORITHM_C
 #include <stdio.h>
@@ -28,7 +30,7 @@ typedef struct _chromossome_ {
     double* genes;
     unsigned int neighbors[ AMT_NEIGHBORS ];
     double fitness;
-    char RW_type; // Reading and Writing type - 0 for Reading, 1 for Writing
+    char random; // 1 if it's a random chromossome
     char sels;
 } Chromossome;
 

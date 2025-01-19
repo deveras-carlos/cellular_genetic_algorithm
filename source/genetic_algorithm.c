@@ -12,25 +12,7 @@ float randgen(float lower_limit, float upper_limit)
 
 }
 
-double sphere( double x[], int n ) {
-    register int i;
-    double sum=100;
-    for (i=0; i< n; i++)
-        sum += pow(x[i],2);
-
-    return sum;
-}
-
 double sample_fitness( double* genes, int n ){
-    // double sum = 0;
-    // for ( int i = 0; i < n; i++ )
-    //     sum += genes[ i ];
-    //     for ( int j = 0; j < n; j++ ){
-    //         for ( int k = j + 1; k < n; k++ ){
-    //             sum += ( genes[ j ] * genes[ k ] );
-    //         }
-    //     }
-    // return sum;
     register int i;
     double sum = 100;
     for ( i = 0; i< n; i++ )
@@ -72,8 +54,13 @@ void start_population(
         fit = fitness_function( population->reading_individuals[ i ].genes, individual_size );
         population->writing_individuals[ i ].fitness = population->reading_individuals[ i ].fitness = fit;
 
-        population->reading_individuals[ i ].RW_type = READING;
-        population->writing_individuals[ i ].RW_type = WRITING;
+        if ( i == 0 || i == COLS / 4 || i == COLS / 2 || i == COLS - COLS / 4 ){
+            population->reading_individuals[ i ].random = TRUE;
+            population->writing_individuals[ i ].random = TRUE;
+        } else {
+            population->reading_individuals[ i ].random = FALSE;
+            population->writing_individuals[ i ].random = FALSE;
+        }
 
         population->reading_individuals[ i ].sels = 0;
         population->writing_individuals[ i ].sels = 0;
@@ -113,16 +100,55 @@ void blend_crossover( Population* population, int father, int mother, int son, f
     }
 }
 
+void downhill_local_search(
+    Chromossome* individual, int individual_size,
+    double (*fitness_function)(double*, int), double lower_limit, double upper_limit
+){
+    int i;
+    double step_size = 0.01; // Step size for tweaking genes
+    double new_fitness, original_fitness = individual->fitness;
+
+    for (i = 0; i < individual_size; i++) {
+        // Store original gene value
+        double original_gene = individual->genes[i];
+
+        // Perturb the gene positively
+        individual->genes[i] = original_gene + step_size;
+        fix_unfeasible(&(individual->genes[i]), lower_limit, upper_limit);
+        new_fitness = fitness_function(individual->genes, individual_size);
+
+        // If improved, keep the change; otherwise, try negative perturbation
+        if (new_fitness < original_fitness) {
+            original_fitness = new_fitness;
+        } else {
+            // Restore original value and try negative perturbation
+            individual->genes[i] = original_gene - step_size;
+            fix_unfeasible(&(individual->genes[i]), lower_limit, upper_limit);
+            new_fitness = fitness_function(individual->genes, individual_size);
+
+            if (new_fitness < original_fitness) {
+                original_fitness = new_fitness;
+            } else {
+                // Restore original gene if neither direction improves fitness
+                individual->genes[i] = original_gene;
+            }
+        }
+    }
+
+    // Update fitness
+    individual->fitness = original_fitness;
+}
+
 void genetic_algorithm(  ){
     Population population;
     int pa1, pa2;
-    double fit, dvp, med;
+    double fit, dvp, med, gene;
     int cfo = 0, generation = 0;
-    int i;
+    int i, j;
 
     double *auxiliar_genes;
 
-    int num_threads = 2;
+    int num_threads = 4;
 
     srand((unsigned) time(0));
 
@@ -153,18 +179,26 @@ void genetic_algorithm(  ){
     do {
 
         #pragma omp parallel for num_threads( num_threads ) \
-        private( pa1, pa2, fit, i ) shared( population ) reduction( +:cfo )
+        private( pa1, pa2, fit, gene, i, j ) shared( population ) reduction( +:cfo )
         for ( i = 0; i < population.population_size; i++ ){
-            pa1 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
-            pa2 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
+            if ( population.reading_individuals[ i ].random == TRUE ){
+                for ( j = 0; j < population.individual_size; j++ ){
+                    gene = (double) randgen( LOWER_BOUND, UPPER_BOUND );
+                    population.reading_individuals[ i ].genes[ j ] = gene;
+                    population.writing_individuals[ i ].genes[ j ] = gene;
+                }
+            } else {
+                pa1 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
+                pa2 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
 
-            if ( pa1 != pa2 ){
-                blend_crossover( &population, pa1, pa2, i, XALPHA );
-                population.writing_individuals[ i ].fitness = sample_fitness( population.writing_individuals[ i ].genes, population.individual_size );
-                if ( population.writing_individuals[ i ].fitness < population.reading_individuals[ i ].fitness )
-                    population.reading_individuals[ i ].sels++;
-                
-                cfo++;
+                if ( pa1 != pa2 ){
+                    blend_crossover( &population, pa1, pa2, i, XALPHA );
+                    population.writing_individuals[ i ].fitness = sample_fitness( population.writing_individuals[ i ].genes, population.individual_size );
+                    if ( population.writing_individuals[ i ].fitness < population.reading_individuals[ i ].fitness )
+                        population.reading_individuals[ i ].sels++;
+                    
+                    cfo++;
+                }
             }
         }
 
@@ -182,9 +216,21 @@ void genetic_algorithm(  ){
             }
         }
 
+        #pragma omp parallel for num_threads(num_threads) private(i, j) shared(population)
+        for (i = 0; i < population.population_size; i++) {
+            for ( j = 0; j < MAX_ITER_LOCAL_SEARCH; j++ )
+                downhill_local_search(
+                    &(population.reading_individuals[i]), 
+                    population.individual_size, 
+                    sample_fitness, 
+                    LOWER_BOUND, 
+                    UPPER_BOUND
+                );
+        }
+
         generation++;
-        // printf( "Evaluated individuals %d\n", cfo );
-        // printf( "Generation number %d\n", generation );
+        printf( "Evaluated individuals %d\n", cfo );
+        printf( "Generation number %d\n", generation );
     } while ( cfo < MAX_GEN );
 
     for ( i = 0; i < population.population_size; i++ ){
