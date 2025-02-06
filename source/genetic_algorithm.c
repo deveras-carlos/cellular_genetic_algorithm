@@ -2,23 +2,13 @@
 #define GENETIC_ALGORITHM_C
 #include "genetic_algorithm.h"
 
-float randgen(float lower_limit, float upper_limit)
-{
+float randgen(float lower_limit, float upper_limit){
 	float fRandomVal;
 
-	fRandomVal = rand()%101/100.;        // rand entre 0 e 1
+	fRandomVal = ( rand(  ) % 101 ) / 100.;
 
-	return(	lower_limit + (float) (fRandomVal * (upper_limit - lower_limit)) );
+	return (	lower_limit + (float) (fRandomVal * (upper_limit - lower_limit)) );
 
-}
-
-double sample_fitness( double* genes, int n ){
-    register int i;
-    double sum = 100;
-    for ( i = 0; i < n; i++ )
-        sum += pow( genes[i], 2 );
-
-    return sum;
 }
 
 void start_population(
@@ -76,21 +66,6 @@ void start_population(
     population->equals = 0;
 }
 
-int tournament_selection(Population* population, int individual, int tournament_size) {
-    int best = -1;
-    double best_fitness = INFINITY; // Assuming lower fitness is better
-    for (int i = 0; i < tournament_size; i++) {
-        int rand_index = rand() % AMT_NEIGHBORS;
-        int neighbor = population->reading_individuals[individual].neighbors[ rand_index ];
-        double fitness = population->reading_individuals[neighbor].fitness;
-        if (fitness < best_fitness) {
-            best = rand_index;
-            best_fitness = fitness;
-        }
-    }
-    return best;
-}
-
 int fix_unfeasible( double* xr, double lower_limit, double upper_limit ){
     if ( ( *xr ) > upper_limit )
         *xr = upper_limit - PREBATI * ( ( *xr ) - upper_limit ) / ( ( *xr ) - lower_limit );
@@ -108,7 +83,7 @@ void blend_crossover( Population* population, int father, int mother, int son, f
     b = 1 + alpha;
 
     for ( i = 0; i < population->individual_size; i++ ){
-        r = a + ( rand(  ) % 101/100. ) * ( b - a );
+        r = a + ( ( rand(  ) % 101 ) / 100. ) * ( b - a );
         population->writing_individuals[ son ].genes[ i ] = population->reading_individuals[ father ].genes[ i ] +
         r * ( population->reading_individuals[ mother ].genes[ i ] - population->reading_individuals[ father ].genes[ i ] );
         fix_unfeasible( &( population->writing_individuals[ son ].genes[ i ] ), LOWER_BOUND, UPPER_BOUND );
@@ -120,23 +95,19 @@ void downhill_local_search(
     double (*fitness_function)(double*, int), double lower_limit, double upper_limit
 ){
     int i;
-    double step_size = 0.01 - 0.0001 * ( double ) step; // Step size for tweaking genes
+    double step_size = 0.01 - 0.0001 * ( double ) step;
     double new_fitness, original_fitness = individual->fitness;
 
     for (i = 0; i < individual_size; i++) {
-        // Store original gene value
         double original_gene = individual->genes[i];
 
-        // Perturb the gene positively
         individual->genes[i] = original_gene + step_size;
         fix_unfeasible(&(individual->genes[i]), lower_limit, upper_limit);
         new_fitness = fitness_function(individual->genes, individual_size);
 
-        // If improved, keep the change; otherwise, try negative perturbation
         if (new_fitness < original_fitness) {
             original_fitness = new_fitness;
         } else {
-            // Restore original value and try negative perturbation
             individual->genes[i] = original_gene - step_size;
             fix_unfeasible(&(individual->genes[i]), lower_limit, upper_limit);
             new_fitness = fitness_function(individual->genes, individual_size);
@@ -144,17 +115,17 @@ void downhill_local_search(
             if (new_fitness < original_fitness) {
                 original_fitness = new_fitness;
             } else {
-                // Restore original gene if neither direction improves fitness
                 individual->genes[i] = original_gene;
             }
         }
     }
 
-    // Update fitness
     individual->fitness = original_fitness;
 }
 
-void genetic_algorithm(  ){
+void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
+    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit ){
+    
     clock_t start, end;
 
     Population population;
@@ -167,9 +138,9 @@ void genetic_algorithm(  ){
 
     int num_threads = 40;
 
-    srand((unsigned) time(0));
+    srand( ( unsigned ) time( 0 ) );
 
-    start_population( &population, MAX_POPULATION, MAX_GENES, sample_fitness, LOWER_BOUND, UPPER_BOUND );
+    start_population( &population, MAX_POPULATION, MAX_GENES, fitness_function, LOWER_BOUND, UPPER_BOUND );
 
     for ( int i = 0; i < MAX_POPULATION; i++ ){
         printf( "Individual[ %d ] = {\n", i );
@@ -206,7 +177,7 @@ void genetic_algorithm(  ){
                     population.writing_individuals[ i ].genes[ j ] = gene;
                 }
 
-                fit = sample_fitness( population.reading_individuals[ i ].genes, population.individual_size );
+                fit = fitness_function( population.reading_individuals[ i ].genes, population.individual_size );
                 population.writing_individuals[ i ].fitness = population.reading_individuals[ i ].fitness = fit;
             } else {
                 pa1 = population.reading_individuals[ i ].neighbors[ 0 + (rand(  ) % AMT_NEIGHBORS ) ];
@@ -216,7 +187,7 @@ void genetic_algorithm(  ){
 
                 if ( pa1 != pa2 ){
                     blend_crossover( &population, pa1, pa2, i, XALPHA );
-                    population.writing_individuals[ i ].fitness = sample_fitness( population.writing_individuals[ i ].genes, population.individual_size );
+                    population.writing_individuals[ i ].fitness = fitness_function( population.writing_individuals[ i ].genes, population.individual_size );
                     if ( population.writing_individuals[ i ].fitness < population.reading_individuals[ i ].fitness )
                         population.reading_individuals[ i ].sels++;
                     
@@ -246,7 +217,7 @@ void genetic_algorithm(  ){
                     &(population.reading_individuals[i]), 
                     population.individual_size,
                     generation,
-                    sample_fitness, 
+                    fitness_function, 
                     LOWER_BOUND, 
                     UPPER_BOUND
                 );
