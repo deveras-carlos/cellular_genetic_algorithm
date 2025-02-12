@@ -3,7 +3,6 @@
 #include "genetic_algorithm.h"
 
 float randgen(float lower_limit, float upper_limit){
-float randgen(float lower_limit, float upper_limit){
 	float fRandomVal;
 
 	fRandomVal = ( rand(  ) % 101 ) / 100.;
@@ -172,9 +171,6 @@ void downhill_local_search(
 
     individual->fitness = original_fitness;
 }
-
-void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
-    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit ){
     
 void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
     double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit ){
