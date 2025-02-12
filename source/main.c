@@ -98,7 +98,7 @@ int main( int argc, char* argv[  ] ){
     for ( int j = 0; j < 1; j++ ){
         for ( int i = ras; i <= ras; i++ ){
             // for ( thread_count = 10; thread_count <= 40; thread_count *= 2 ){
-            for ( thread_count = 8; thread_count < 9; thread_count++ ){
+            for ( thread_count = 40; thread_count < 41; thread_count++ ){
                 printf( "Iniciando execução de %s com %d threads\n", limites_fixos[ i ].nome, thread_count );
                 genetic_algorithm( thread_count, max_vars[ j ][ i ], funccod[ i ], limites_fixos[ i ].inf, limites_fixos[ i ].sup );
                 printf( "Finalizando execução de %s\n\n", limites_fixos[ i ].nome );

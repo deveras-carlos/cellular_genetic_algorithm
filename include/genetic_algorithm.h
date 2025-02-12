@@ -10,13 +10,13 @@
 
 #define PREBATI (rand()%101/100.F)
 #define XALPHA  0.2
-#define PMUTAC 50
+#define PMUTAC 10
 
-#define TOURNAMENT_SIZE 5
-#define MIN_ITER_LOCAL_SEARCH 10
-#define MIN_ITERATIONS 1000
+#define GREEDY_START_RATE 0.3
+#define MIN_ITER_LOCAL_SEARCH 50
+#define MIN_ITERATIONS 100
 
-#define MAX_WAIT_TRIALS 10000
+#define MAX_WAIT_TRIALS 150
 
 #define LOCAL_SEARCH_TYPE 2
 #define RANDOM_TYPE 1
@@ -29,6 +29,7 @@
 #include <string.h>
 #include <math.h>
 #include <omp.h>
+#include <float.h>
 
 typedef struct _chromossome_ {
     double* genes;
@@ -63,9 +64,9 @@ int fix_unfeasible( double* xr, double lower_limit, double upper_limit );
 
 void blend_crossover( Population* population, int father, int mother, int son, float alpha );
 
-void mutation( Population* population, unsigned int individual, unsigned int current_generation, int exponent );
+// void mutation( Population* population, unsigned int individual, unsigned int current_generation, int exponent );
 
-void local_search( Population* population, double ( *fitness_function )( double*, int n ) );
+// void local_search( Population* population, double ( *fitness_function )( double*, int n ) );
 
 void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
     double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit );
