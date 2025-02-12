@@ -4,20 +4,23 @@
 #define FALSE 0
 #define TRUE 1
 
-#define MAX_GENES 10000
-#define ROWS 10
-#define COLS 4
-#define MAX_POPULATION ROWS * COLS
+#define MAX_POPULATION 40
 #define AMT_NEIGHBORS 4
-#define MAX_GEN 10000
+#define MAX_GEN 1000
 
 #define PREBATI (rand()%101/100.F)
-#define LOWER_BOUND -5.12F
-#define UPPER_BOUND 5.12F
-#define XALPHA  0.35
+#define XALPHA  0.2
+#define PMUTAC 50
 
-#define TOURNAMENT_SIZE 3
-#define MAX_ITER_LOCAL_SEARCH 10
+#define TOURNAMENT_SIZE 5
+#define MIN_ITER_LOCAL_SEARCH 10
+#define MIN_ITERATIONS 1000
+
+#define MAX_WAIT_TRIALS 10000
+
+#define LOCAL_SEARCH_TYPE 2
+#define RANDOM_TYPE 1
+#define CROSSOVER_TYPE 0
 
 #ifdef GENETIC_ALGORITHM_C
 #include <stdio.h>
@@ -31,7 +34,7 @@ typedef struct _chromossome_ {
     double* genes;
     unsigned int neighbors[ AMT_NEIGHBORS ];
     double fitness;
-    char random; // 1 if it's a random chromossome
+    char type; // 0 if crossover, 1 if random, 2 if local search
     char sels;
 } Chromossome;
 
@@ -46,6 +49,9 @@ typedef struct _population_ {
         int             mutation_amount;
         int             equals;
         int             best_generation;
+
+        double          lower_limit;
+        double          upper_limit;
 } Population;
 
 void start_population(
@@ -61,11 +67,13 @@ void mutation( Population* population, unsigned int individual, unsigned int cur
 
 void local_search( Population* population, double ( *fitness_function )( double*, int n ) );
 
-void genetic_algorithm(  );
+void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
+    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit );
 
 #else
 
-extern void genetic_algorithm(  );
+extern void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
+    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit );
 
 #endif
 
