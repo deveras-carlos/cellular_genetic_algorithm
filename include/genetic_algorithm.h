@@ -10,17 +10,19 @@
 
 #define PREBATI (rand()%101/100.F)
 #define XALPHA  0.2
-#define PMUTAC 10
+#define PMUTAC 30
 
 #define GREEDY_START_RATE 0.3
-#define MIN_ITER_LOCAL_SEARCH 50
-#define MIN_ITERATIONS 100
+#define MIN_ITER_LOCAL_SEARCH 1
+#define MIN_ITERATIONS 1000
 
-#define MAX_WAIT_TRIALS 150
+#define MAX_WAIT_TRIALS 10
 
+#define CHANGE_TYPE_CHANCE 0.5
+#define AMT_TYPE_IND 3
 #define LOCAL_SEARCH_TYPE 2
-#define RANDOM_TYPE 1
-#define CROSSOVER_TYPE 0
+#define CROSSOVER_TYPE 1
+#define RANDOM_TYPE 0
 
 #ifdef GENETIC_ALGORITHM_C
 #include <stdio.h>
