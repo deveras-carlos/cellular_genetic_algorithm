@@ -55,7 +55,7 @@ double schwefel7( double x[  ], int n ){
 	int i;
 	double d;
 	for(i = 0, d = 0; i < n; i++)
-		d -= x[i] * sin( sqrt( fabs( x[ i ] ) ) );
+		d = fabs( x[i] * sin( sqrt( fabs( x[ i ] ) ) ) );
 
 	return ( d + schw_ans * ( double )n );
 }
@@ -87,26 +87,61 @@ DadosFuncoes limites_fixos[  ] = {
 };
 
 int main( int argc, char* argv[  ] ){
-    int thread_count;
+    int max_threads = 40;
+
+    int thread_count, max_wait_trials;
 
     int max_vars[ 3 ][ 5 ] = {
         { 10, 10, 10, 10, 10 },
         { 200, 200, 200, 200, 200 },
-        { 700, 200, 500, 200, 1000 }
+        { 1000, 1000, 1000, 1000, 1000 }
     };
 
-    for ( int j = 0; j < 1; j++ ){
+    for ( int j = 0; j < 3; j++ ){
         for ( int i = ras; i <= ras; i++ ){
-            // for ( thread_count = 10; thread_count <= 40; thread_count *= 2 ){
-            for ( thread_count = 40; thread_count < 41; thread_count++ ){
-                printf( "Iniciando execução de %s com %d threads\n", limites_fixos[ i ].nome, thread_count );
-                genetic_algorithm( thread_count, max_vars[ j ][ i ], funccod[ i ], limites_fixos[ i ].inf, limites_fixos[ i ].sup );
-                printf( "Finalizando execução de %s\n\n", limites_fixos[ i ].nome );
+            for ( thread_count = 40; thread_count <= max_threads; thread_count *= 2 ){
+                for ( int max_wait_trials = 100; max_wait_trials <= 10000; max_wait_trials *= 10 ){
+                    for ( int k = 0; k <= 5; k++ ){
+                        printf( "Iniciando execução paralela de %s com %d threads\n", limites_fixos[ i ].nome, thread_count );
+                        parallel_genetic_algorithm(
+                            thread_count,
+                            max_vars[ j ][ i ],
+                            funccod[ i ],
+                            limites_fixos[ i ].inf,
+                            limites_fixos[ i ].sup,
+                            max_wait_trials,
+                            k,
+                            i,
+                            j
+                        );
+                        printf( "Finalizando execução paralela de %s\n\n", limites_fixos[ i ].nome );
+                    }
+                }
             }
         }
     }
 
-
+    for ( int j = 0; j < 3; j++ ){
+        for ( int i = gri; i <= sph; i++ ){
+            for ( thread_count = 10; thread_count <= max_threads; thread_count *= 2 ){
+                for ( int k = 0; k <= 5; k++ ){
+                    printf( "Iniciando execução sequencial de %s com %d threads\n", limites_fixos[ i ].nome, thread_count );
+                    parallel_genetic_algorithm(
+                        thread_count,
+                        max_vars[ j ][ i ],
+                        funccod[ i ],
+                        limites_fixos[ i ].inf,
+                        limites_fixos[ i ].sup,
+                        10,
+                        k,
+                        i,
+                        j
+                    );
+                    printf( "Finalizando execução sequencial de %s\n\n", limites_fixos[ i ].nome );
+                }
+            }
+        }
+    }
 
     return 0;
 }

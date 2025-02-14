@@ -1,6 +1,66 @@
 #ifndef GENETIC_ALGORITHM_C
 #define GENETIC_ALGORITHM_C
 #include "genetic_algorithm.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <math.h>
+#include <omp.h>
+#include <float.h>
+#include <sys/stat.h> // For creating the "results" directory
+#include <sys/types.h>
+
+void save_results(const Population *population, double execution_time, 
+                  unsigned int i, unsigned int max_wait_trials, 
+                  unsigned int population_size, unsigned int j, unsigned int curr_amt_vars) {
+    // Create the "results" folder if it doesn't exist
+    struct stat st = {0};
+    if (stat("results", &st) == -1) {
+        mkdir("results", 0700); // Creates folder with permissions
+    }
+
+    // Generate the filename
+    char filename[256];
+    snprintf(filename, sizeof(filename), "results/results_i%d_vars_%d_trials%d_pop%d_j%d.txt", 
+             i, curr_amt_vars, max_wait_trials, population_size, j);
+
+    // Open the file for writing
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        perror("Error opening file for writing");
+        return;
+    }
+
+    // Write metadata
+    fprintf(file, "Execution Time: %.2f seconds\n", execution_time);
+    fprintf(file, "Population Size: %d\n", population->population_size);
+    fprintf(file, "Individual Size: %d\n", population->individual_size);
+    fprintf(file, "Best Fitness: %.10f\n", 
+            population->reading_individuals[population->best].fitness);
+    fprintf(file, "Worst Fitness: %.10f\n", 
+            population->reading_individuals[population->worst].fitness);
+    fprintf(file, "Sum of Fitness: %.10f\n", population->sum_fitness);
+    fprintf(file, "Best Generation: %d\n", population->best_generation);
+
+    // Write population data
+    fprintf(file, "\nPopulation Data:\n");
+    for (int i = 0; i < population->population_size; i++) {
+        fprintf(file, "Individual %d: Fitness = %.10f, Type = %d, Sels = %d\n", 
+                i, population->reading_individuals[i].fitness, 
+                population->reading_individuals[i].type, 
+                population->reading_individuals[i].sels);
+        fprintf(file, "Genes: ");
+        for (int j = 0; j < population->individual_size; j++) {
+            fprintf(file, "%.10f ", population->reading_individuals[i].genes[j]);
+        }
+        fprintf(file, "\n");
+    }
+
+    // Close the file
+    fclose(file);
+    printf("Results saved to %s\n", filename);
+}
 
 float randgen(float lower_limit, float upper_limit){
 	float fRandomVal;
@@ -148,46 +208,6 @@ void mutation(Population* population, unsigned int individual, unsigned int curr
     }
 }
 
-
-void local_search(
-    Chromossome* individual, int individual_size,
-    double lower_limit, double upper_limit, double (*fitness_function)(double*, int),
-    int cfo, int max_cfo
-) {
-    int j;
-    double best_gene;
-    double best_fitness;
-    double current_fitness;
-
-    // Adjust step size and neighborhood size based on cfo
-    double step_size = (upper_limit - lower_limit) / (100.0 + cfo * 0.1);
-    double neighborhood_size = (upper_limit - lower_limit) * (0.5 - (double)cfo / ( 2 *  max_cfo ) );
-
-    for (j = 0; j < individual_size; j++) {
-        double current_gene = individual->genes[j];
-        double lower_bound = fmax(lower_limit, current_gene - neighborhood_size);
-        double upper_bound = fmin(upper_limit, current_gene + neighborhood_size);
-
-        best_gene = current_gene;
-        best_fitness = fitness_function(individual->genes, individual_size);
-
-        for (double candidate = lower_bound; candidate <= upper_bound; candidate += step_size) {
-            individual->genes[j] = candidate;
-            current_fitness = fitness_function(individual->genes, individual_size);
-
-            if (current_fitness < best_fitness) {
-                best_fitness = current_fitness;
-                best_gene = candidate;
-            }
-        }
-
-        individual->genes[j] = best_gene;
-    }
-
-    // Update fitness after the local search
-    individual->fitness = fitness_function(individual->genes, individual_size);
-}
-
 void mutation_local_search(
     Chromossome* individual, int individual_size,
     double lower_limit, double upper_limit, double (*fitness_function)(double*, int),
@@ -222,9 +242,10 @@ void mutation_local_search(
 
     individual->fitness = best_fitness;
 }
-    
-void genetic_algorithm( unsigned int population_size, unsigned int individual_size,
-    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit ){
+
+void parallel_genetic_algorithm( unsigned int population_size, unsigned int individual_size,
+    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit, int max_wait_trials,
+    int curr_exec, int curr_fitness, int curr_amt_vars ){
     
     clock_t start, end;
 
@@ -252,18 +273,6 @@ void genetic_algorithm( unsigned int population_size, unsigned int individual_si
     start_population( &population, population_size, individual_size, fitness_function, lower_limit, upper_limit );
     population.lower_limit = lower_limit;
     population.upper_limit = upper_limit;
-
-    printf("\n\tExecutado em tempo = %.4f,CFO=%d ", (double) ( (end - start) / (CLOCKS_PER_SEC*num_threads) ), cfo);
-
-    for ( i = 0; i < population.population_size; i++ ){
-        printf( "\n\tIndividual (%d) = %.10f | %d", i, population.reading_individuals[ i ].fitness, population.reading_individuals[ i ].sels );
-        if ( population.reading_individuals[ i ].fitness < population.reading_individuals[ population.best ].fitness )
-            population.best = i;
-    }
-
-    printf( "\n\nThe best is %d with fitness equals to %.4f\n", population.best, population.reading_individuals[ population.best ].fitness );
-
-    printf( "\nFinal max_iter_local_search value: %d\n", max_iter_local_search );
 
     start = clock();
     do {
@@ -299,7 +308,7 @@ void genetic_algorithm( unsigned int population_size, unsigned int individual_si
                 }
             }
 
-            // Section 3: Crossover and mutation operations
+            // Section 2: Crossover and mutation operations
             #pragma omp section
             {
                 #pragma omp parallel for num_threads(num_threads_crossover) \
@@ -346,67 +355,262 @@ void genetic_algorithm( unsigned int population_size, unsigned int individual_si
             }
         }
 
+        // Atualização de indivíduos e atualização de tipos
         #pragma omp parallel for num_threads(num_threads) \
         private(auxiliar_genes) shared(population)
         for (int i = 0; i < population.population_size; i++) {
             if (population.writing_individuals[i].sels > population.reading_individuals[i].sels) {
-                #pragma omp critical
-                {
-                    population.reading_individuals[i].fitness = population.writing_individuals[i].fitness;
-                    auxiliar_genes = population.reading_individuals[i].genes;
-                    population.reading_individuals[i].genes = population.writing_individuals[i].genes;
-                    population.writing_individuals[i].genes = auxiliar_genes;
-                    population.reading_individuals[i].sels++;
-                }
+                population.reading_individuals[i].fitness = population.writing_individuals[i].fitness;
+                auxiliar_genes = population.reading_individuals[i].genes;
+                population.reading_individuals[i].genes = population.writing_individuals[i].genes;
+                population.writing_individuals[i].genes = auxiliar_genes;
+                population.reading_individuals[i].sels++;
             }
 
             double rand_change_type = ((rand() % 101) / 100.0);
-            if (population.reading_individuals[i].type != RANDOM_TYPE && 
-                rand_change_type < CHANGE_TYPE_CHANCE) {
-                char new_type = (rand() % LOCAL_SEARCH_TYPE) + CROSSOVER_TYPE;
-
+            int new_pos;
+            char old_type, new_type;
+            if ( population.reading_individuals[i].type != RANDOM_TYPE && rand_change_type < CHANGE_TYPE_CHANCE) {
+                if (population.reading_individuals[i].type == CROSSOVER_TYPE) {
+                    new_pos = (rand() % num_threads_crossover);
+                } else if (population.reading_individuals[i].type == LOCAL_SEARCH_TYPE) {
+                    new_pos = ( ( rand() % num_threads_local_search ) + num_threads_crossover);
+                }
+                
+                // Swap reading_individuals[i] with reading_individuals[new_pos]
                 #pragma omp critical
                 {
-                    population.reading_individuals[i].type = new_type;
-                    population.writing_individuals[i].type = new_type;
+                Chromossome temp = population.reading_individuals[i];
+                population.reading_individuals[i].genes = population.reading_individuals[new_pos].genes;
+                population.reading_individuals[i].fitness = population.reading_individuals[new_pos].fitness;
+                population.reading_individuals[new_pos].genes = temp.genes;
+                population.reading_individuals[new_pos].fitness = temp.fitness;
+
+                temp = population.writing_individuals[i];
+                population.writing_individuals[i].genes = population.writing_individuals[new_pos].genes;
+                population.writing_individuals[i].fitness = population.writing_individuals[new_pos].fitness;
+                population.writing_individuals[new_pos].genes = temp.genes;
+                population.writing_individuals[new_pos].fitness = temp.fitness;
                 }
             }
         }
 
-        // Update mutation rate and other parameters
         if (improvement || generation < MIN_ITERATIONS) {
             no_improvement_trials = 0;
             mutation_rate = PMUTAC / 100.0;
         } else {
             no_improvement_trials++;
-            mutation_rate = fmin(mutation_rate + 0.05, 1.0); // Increase by 5%, max 100%
+            mutation_rate = fmin(mutation_rate + 0.05, 1.0);
         }
 
-        printf("Mutation rate: %lf\n", mutation_rate);
-        printf("Generation: %d\n", generation);
 
         generation++;
-    } while (no_improvement_trials < MAX_WAIT_TRIALS);
+        printf( "Generation: %d\n", generation );
+    } while ( generation < max_wait_trials );
+    end = clock();
+
+    // Calculate execution time
+    double execution_time = (double)(end - start) / CLOCKS_PER_SEC;
+
+    // Update population statistics (e.g., best, worst, sum of fitness)
+    population.best = 0;
+    population.worst = 0;
+    population.sum_fitness = 0.0;
+    for (int i = 0; i < population.population_size; i++) {
+        population.sum_fitness += population.reading_individuals[i].fitness;
+        if (population.reading_individuals[i].fitness < 
+            population.reading_individuals[population.best].fitness) {
+            population.best = i;
+        }
+        if (population.reading_individuals[i].fitness > 
+            population.reading_individuals[population.worst].fitness) {
+            population.worst = i;
+        }
+    }
+    population.best_generation = generation;
+
+    // Save results
+    save_results(&population, execution_time, curr_fitness, max_wait_trials, population_size, curr_exec, curr_amt_vars);
+
+    // Free allocated memory
+    free(population.reading_individuals->genes);
+    free(population.writing_individuals->genes);
+}
+
+void sequential_genetic_algorithm( unsigned int population_size, unsigned int individual_size,
+    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit, int max_wait_trials,
+    int curr_exec, int curr_fitness, int curr_amt_vars ){
+    
+    clock_t start, end;
+
+    Population population;
+    int pa1, pa2;
+    double fit, gene;
+    int cfo = 0, generation = 0;
+    int i, j;
+    int no_improvement_trials = 0;
+    int num_threads_crossover = (int)(population_size * 0.8);
+    int num_threads_local_search = population_size - num_threads_crossover;
+
+    char aux_type;
+
+    int max_iter_local_search = MIN_ITER_LOCAL_SEARCH;
+
+    Chromossome auxiliar_individual;
+    double *auxiliar_genes;
+    int num_threads = population_size;
+
+    double mutation_rate = PMUTAC / 100.0;
+
+    srand( ( unsigned ) time( 0 ) );
+
+    start_population( &population, population_size, individual_size, fitness_function, lower_limit, upper_limit );
+    population.lower_limit = lower_limit;
+    population.upper_limit = upper_limit;
+
+    start = clock();
+    do {
+        int improvement = 0;
+
+        // Section 1: Local search operations
+        for (int i = num_threads_crossover; i < population.population_size; i++) {
+            if (population.reading_individuals[i].type == LOCAL_SEARCH_TYPE) {
+                for (j = 0; j < max_iter_local_search; j++) {
+                    mutation_local_search(
+                        &(population.writing_individuals[i]),
+                        population.individual_size,
+                        population.lower_limit,
+                        population.upper_limit,
+                        fitness_function,
+                        mutation_rate,
+                        1,
+                        (upper_limit - lower_limit) / 100.0
+                    );
+                }
+                if (round(population.writing_individuals[i].fitness * 10000) < 
+                    round(population.reading_individuals[i].fitness * 10000)) {
+                    population.writing_individuals[i].sels++;
+                    improvement = 1;
+                }
+            }
+        }
+
+        // Section 2: Crossover and mutation operations
+        for (int i = 0; i < num_threads_crossover; i++) {
+            if (population.reading_individuals[i].type == RANDOM_TYPE) {
+                for (j = 0; j < population.individual_size; j++) {
+                    gene = (double)randgen(lower_limit, upper_limit);
+                    population.reading_individuals[i].genes[j] = gene;
+                    population.writing_individuals[i].genes[j] = gene;
+                }
+                fit = fitness_function(population.reading_individuals[i].genes, 
+                                    population.individual_size);
+                population.writing_individuals[i].fitness = fit;
+                population.reading_individuals[i].fitness = fit;
+            } else if (population.reading_individuals[i].type == CROSSOVER_TYPE) {
+                pa1 = population.reading_individuals[i].neighbors[rand() % AMT_NEIGHBORS];
+                pa2 = population.reading_individuals[i].neighbors[rand() % AMT_NEIGHBORS];
+
+                if (pa1 != pa2) {
+                    blend_crossover(
+                        &population,
+                        pa1,
+                        pa2,
+                        i,
+                        XALPHA * (1.0 - (double)generation / MAX_GEN)
+                    );
+                    population.writing_individuals[i].fitness = fitness_function(
+                        population.writing_individuals[i].genes,
+                        population.individual_size
+                    );
+
+                    mutation(&population, i, generation, 2, mutation_rate, no_improvement_trials);
+
+                    if (round(population.writing_individuals[i].fitness * 10000) <
+                        round(population.reading_individuals[i].fitness * 10000)) {
+                        population.writing_individuals[i].sels++;
+                        improvement = 1;
+                    }
+                    cfo++;
+                }
+            }
+        }
+
+        // Atualização de indivíduos e atualização de tipos
+        for (int i = 0; i < population.population_size; i++) {
+            if (population.writing_individuals[i].sels > population.reading_individuals[i].sels) {
+                population.reading_individuals[i].fitness = population.writing_individuals[i].fitness;
+                auxiliar_genes = population.reading_individuals[i].genes;
+                population.reading_individuals[i].genes = population.writing_individuals[i].genes;
+                population.writing_individuals[i].genes = auxiliar_genes;
+                population.reading_individuals[i].sels++;
+            }
+
+            double rand_change_type = ((rand() % 101) / 100.0);
+            int new_pos;
+            char old_type, new_type;
+            if ( population.reading_individuals[i].type != RANDOM_TYPE && rand_change_type < CHANGE_TYPE_CHANCE) {
+                if (population.reading_individuals[i].type == CROSSOVER_TYPE) {
+                    new_pos = (rand() % num_threads_crossover);
+                } else if (population.reading_individuals[i].type == LOCAL_SEARCH_TYPE) {
+                    new_pos = ( ( rand() % num_threads_local_search ) + num_threads_crossover);
+                }
+                
+                // Swap reading_individuals[i] with reading_individuals[new_pos]
+                Chromossome temp = population.reading_individuals[i];
+                population.reading_individuals[i].genes = population.reading_individuals[new_pos].genes;
+                population.reading_individuals[i].fitness = population.reading_individuals[new_pos].fitness;
+                population.reading_individuals[new_pos].genes = temp.genes;
+                population.reading_individuals[new_pos].fitness = temp.fitness;
+
+                temp = population.writing_individuals[i];
+                population.writing_individuals[i].genes = population.writing_individuals[new_pos].genes;
+                population.writing_individuals[i].fitness = population.writing_individuals[new_pos].fitness;
+                population.writing_individuals[new_pos].genes = temp.genes;
+                population.writing_individuals[new_pos].fitness = temp.fitness;
+            }
+        }
+
+        if (improvement || generation < MIN_ITERATIONS) {
+            no_improvement_trials = 0;
+            mutation_rate = PMUTAC / 100.0;
+        } else {
+            no_improvement_trials++;
+            mutation_rate = fmin(mutation_rate + 0.05, 1.0);
+        }
+
+        generation++;
+    } while ( generation < max_wait_trials );
 
 
     end = clock();
 
+    // Calculate execution time
+    double execution_time = (double)(end - start) / CLOCKS_PER_SEC;
 
-    printf("\n\tExecutado em tempo = %.4f,CFO=%d ", (double) ( (end - start) / (CLOCKS_PER_SEC*num_threads) ), cfo);
-
-    for ( i = 0; i < population.population_size; i++ ){
-        printf( "\n\tIndividual (%d) = %.10f | %d", i, population.reading_individuals[ i ].fitness, population.reading_individuals[ i ].sels );
-        if ( population.reading_individuals[ i ].fitness < population.reading_individuals[ population.best ].fitness )
+    // Update population statistics (e.g., best, worst, sum of fitness)
+    population.best = 0;
+    population.worst = 0;
+    population.sum_fitness = 0.0;
+    for (int i = 0; i < population.population_size; i++) {
+        population.sum_fitness += population.reading_individuals[i].fitness;
+        if (population.reading_individuals[i].fitness > 
+            population.reading_individuals[population.best].fitness) {
             population.best = i;
+        }
+        if (population.reading_individuals[i].fitness < 
+            population.reading_individuals[population.worst].fitness) {
+            population.worst = i;
+        }
     }
+    population.best_generation = generation;
 
-    printf( "\n\nThe best is %d with fitness equals to %.4f\n", population.best, population.reading_individuals[ population.best ].fitness );
+    // Save results
+    save_results(&population, execution_time, curr_fitness, max_wait_trials, population_size, curr_exec, curr_amt_vars);
 
-    printf( "\nFinal max_iter_local_search value: %d\n", max_iter_local_search );
-
-    free( population.reading_individuals->genes );
-    free( population.writing_individuals->genes );
+    // Free allocated memory
+    free(population.reading_individuals->genes);
+    free(population.writing_individuals->genes);
 }
-
 
 #endif
