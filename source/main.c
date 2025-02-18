@@ -87,21 +87,22 @@ DadosFuncoes limites_fixos[  ] = {
 };
 
 int main( int argc, char* argv[  ] ){
-    int max_threads = 40;
+    int max_threads = 8;
 
     int thread_count, max_wait_trials;
 
-    int max_vars[ 3 ][ 5 ] = {
+    int max_vars[ 4 ][ 5 ] = {
         { 10, 10, 10, 10, 10 },
         { 200, 200, 200, 200, 200 },
-        { 1000, 1000, 1000, 1000, 1000 }
+        { 1000, 1000, 1000, 1000, 1000 },
+        { 10000, 10000, 10000, 10000, 10000 }
     };
 
-    for ( int j = 0; j < 3; j++ ){
-        for ( int i = ras; i <= ras; i++ ){
-            for ( thread_count = 40; thread_count <= max_threads; thread_count *= 2 ){
-                for ( int max_wait_trials = 100; max_wait_trials <= 10000; max_wait_trials *= 10 ){
-                    for ( int k = 0; k <= 5; k++ ){
+    for ( int j = 0; j < 4; j++ ){
+        for ( int i = gri; i <= sph; i++ ){
+            for ( thread_count = 10; thread_count <= max_threads; thread_count *= 2 ){
+                for ( int max_wait_trials = 10; max_wait_trials <= 10000; max_wait_trials *= 10 ){
+                    for ( int k = 0; k <= 10; k++ ){
                         printf( "Iniciando execução paralela de %s com %d threads\n", limites_fixos[ i ].nome, thread_count );
                         parallel_genetic_algorithm(
                             thread_count,
@@ -121,7 +122,7 @@ int main( int argc, char* argv[  ] ){
         }
     }
 
-    for ( int j = 0; j < 3; j++ ){
+    for ( int j = 0; j < 4; j++ ){
         for ( int i = gri; i <= sph; i++ ){
             for ( thread_count = 10; thread_count <= max_threads; thread_count *= 2 ){
                 for ( int k = 0; k <= 5; k++ ){
@@ -132,7 +133,7 @@ int main( int argc, char* argv[  ] ){
                         funccod[ i ],
                         limites_fixos[ i ].inf,
                         limites_fixos[ i ].sup,
-                        10,
+                        1000,
                         k,
                         i,
                         j

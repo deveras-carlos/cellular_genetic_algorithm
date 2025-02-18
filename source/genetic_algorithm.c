@@ -75,56 +75,44 @@ float randgen(float lower_limit, float upper_limit){
 
 void start_population(
     Population* population, unsigned int population_size, unsigned int individual_size,
-    double ( *fitness_function )( double*, int n ), double lower_limit, double upper_limit
-){
-    int i, j, k;
-    double gene, base_value, random_offset;
-    double fit, sum = 0;
-    int quintil = population_size / 5;
-    float greedy_n;
-
+    double (*fitness_function)(double*, int n), double lower_limit, double upper_limit
+) {
+    int i, j;
+    int rows = (int)(population_size / 4); // Assuming 4 columns
+    int cols = 4; // Fixed number of columns
     double step_size = (upper_limit - lower_limit) / (double)(population_size);
+    double sum = 0;
 
-    for ( i = 0; i < population_size; i++ ){
-        population->reading_individuals[ i ].genes = ( double* ) malloc( individual_size * sizeof( double ) );
-        population->writing_individuals[ i ].genes = ( double* ) malloc( individual_size * sizeof( double ) );
+    for (i = 0; i < population_size; i++) {
+        population->reading_individuals[i].genes = (double*)malloc(individual_size * sizeof(double));
+        population->writing_individuals[i].genes = (double*)malloc(individual_size * sizeof(double));
 
-        if ( i > 1 && i < population_size - 2 ){
-            population->writing_individuals[ i ].neighbors[ 0 ] = i - 2;
-            population->writing_individuals[ i ].neighbors[ 1 ] = i - 1;
-            population->writing_individuals[ i ].neighbors[ 2 ] = i + 1;
-            population->writing_individuals[ i ].neighbors[ 3 ] = i + 2;
-        } else if ( i == 0 ){
-            population->writing_individuals[ i ].neighbors[ 0 ] = population_size - 2;
-            population->writing_individuals[ i ].neighbors[ 1 ] = population_size - 1;
-            population->writing_individuals[ i ].neighbors[ 2 ] = i + 1;
-            population->writing_individuals[ i ].neighbors[ 3 ] = i + 2;
-        } else if ( i == 1 ){
-            population->writing_individuals[ i ].neighbors[ 0 ] = population_size - 1;
-            population->writing_individuals[ i ].neighbors[ 1 ] = 0;
-            population->writing_individuals[ i ].neighbors[ 2 ] = i + 1;
-            population->writing_individuals[ i ].neighbors[ 3 ] = i + 2;
-        } else if ( i == population_size - 1 ){
-            population->writing_individuals[ i ].neighbors[ 0 ] = i - 2;
-            population->writing_individuals[ i ].neighbors[ 1 ] = i - 1;
-            population->writing_individuals[ i ].neighbors[ 2 ] = 0;
-            population->writing_individuals[ i ].neighbors[ 3 ] = 1;
-        } else if ( i == population_size - 2 ){
-            population->writing_individuals[ i ].neighbors[ 0 ] = i - 2;
-            population->writing_individuals[ i ].neighbors[ 1 ] = i - 1;
-            population->writing_individuals[ i ].neighbors[ 2 ] = population_size - 1;
-            population->writing_individuals[ i ].neighbors[ 3 ] = 0;
+        // Compute grid position
+        int row = i / cols;
+        int col = i % cols;
+
+        // Von Neumann neighbors with wrapping edges
+        population->writing_individuals[i].neighbors[0] = ((row - 1 + rows) % rows) * cols + col; // Top neighbor
+        population->writing_individuals[i].neighbors[1] = ((row + 1) % rows) * cols + col;       // Bottom neighbor
+        population->writing_individuals[i].neighbors[2] = row * cols + (col - 1 + cols) % cols;  // Left neighbor
+        population->writing_individuals[i].neighbors[3] = row * cols + (col + 1) % cols;        // Right neighbor
+
+        // Alternate rows: swap left and right neighbors
+        if (row % 2 == 1) {
+            int temp = population->writing_individuals[i].neighbors[2];
+            population->writing_individuals[i].neighbors[2] = population->writing_individuals[i].neighbors[3];
+            population->writing_individuals[i].neighbors[3] = temp;
         }
 
+        for (j = 0; j < AMT_NEIGHBORS; j++) {
+            population->reading_individuals[i].neighbors[j] = population->writing_individuals[i].neighbors[j];
+        }
 
-        for ( j = 0; j < 4; j++ )
-            population->reading_individuals[ i ].neighbors[ j ] = population->writing_individuals[ i ].neighbors[ j ];
-        
-
+        // Initialize genes with a value around a base value plus some random offset
         for (j = 0; j < individual_size; j++) {
-            base_value = lower_limit + step_size * i;
-            random_offset = ((rand() % 101) / 100.0) * step_size - (step_size / 2.0);
-            gene = base_value + random_offset;
+            double base_value = lower_limit + step_size * i;
+            double random_offset = ((rand() % 101) / 100.0) * step_size - (step_size / 2.0);
+            double gene = base_value + random_offset;
 
             // Clamp gene value to limits
             if (gene < lower_limit) gene = lower_limit;
@@ -134,26 +122,28 @@ void start_population(
             population->writing_individuals[i].genes[j] = gene;
         }
 
+        // Assign fitness
+        double fit = fitness_function(population->reading_individuals[i].genes, individual_size);
+        population->writing_individuals[i].fitness = population->reading_individuals[i].fitness = fit;
 
-        fit = fitness_function( population->reading_individuals[ i ].genes, individual_size );
-        population->writing_individuals[ i ].fitness = population->reading_individuals[ i ].fitness = fit;
-
-        if ( i > ( int )( population->population_size * 0.6 ) ){
-            population->reading_individuals[ i ].type = LOCAL_SEARCH_TYPE;
-            population->writing_individuals[ i ].type = LOCAL_SEARCH_TYPE;
-        } else if ( i == quintil || i == ( 2 * quintil ) || i == ( 3 * quintil ) || i == ( 4 * quintil )  ){
-            population->reading_individuals[ i ].type = RANDOM_TYPE;
-            population->writing_individuals[ i ].type = RANDOM_TYPE;
+        // Assign individual type
+        if (i > (int)(population_size * 0.6)) {
+            population->reading_individuals[i].type = LOCAL_SEARCH_TYPE;
+            population->writing_individuals[i].type = LOCAL_SEARCH_TYPE;
+        } else if (i % (population_size / 5) == 0) {
+            population->reading_individuals[i].type = RANDOM_TYPE;
+            population->writing_individuals[i].type = RANDOM_TYPE;
         } else {
-            population->reading_individuals[ i ].type = CROSSOVER_TYPE;
-            population->writing_individuals[ i ].type = CROSSOVER_TYPE;
+            population->reading_individuals[i].type = CROSSOVER_TYPE;
+            population->writing_individuals[i].type = CROSSOVER_TYPE;
         }
 
-        population->reading_individuals[ i ].sels = 0;
-        population->writing_individuals[ i ].sels = 0;
+        population->reading_individuals[i].sels = 0;
+        population->writing_individuals[i].sels = 0;
 
-        sum += ( fit ); // fabs
+        sum += fit;
     }
+
     population->population_size = population_size;
     population->individual_size = individual_size;
     population->sum_fitness = sum;
@@ -299,8 +289,8 @@ void parallel_genetic_algorithm( unsigned int population_size, unsigned int indi
                                 (upper_limit - lower_limit) / 100.0
                             );
                         }
-                        if (round(population.writing_individuals[i].fitness * 10000) < 
-                            round(population.reading_individuals[i].fitness * 10000)) {
+                        if (round(population.writing_individuals[i].fitness * 10000000) < 
+                            round(population.reading_individuals[i].fitness * 10000000)) {
                             population.writing_individuals[i].sels++;
                             improvement = 1;
                         }
@@ -343,8 +333,8 @@ void parallel_genetic_algorithm( unsigned int population_size, unsigned int indi
 
                             mutation(&population, i, generation, 2, mutation_rate, no_improvement_trials);
 
-                            if (round(population.writing_individuals[i].fitness * 10000) <
-                                round(population.reading_individuals[i].fitness * 10000)) {
+                            if (round(population.writing_individuals[i].fitness * 10000000) <
+                                round(population.reading_individuals[i].fitness * 10000000)) {
                                 population.writing_individuals[i].sels++;
                                 improvement = 1;
                             }
@@ -377,20 +367,21 @@ void parallel_genetic_algorithm( unsigned int population_size, unsigned int indi
                     new_pos = ( ( rand() % num_threads_local_search ) + num_threads_crossover);
                 }
                 
-                // Swap reading_individuals[i] with reading_individuals[new_pos]
-                #pragma omp critical
-                {
-                Chromossome temp = population.reading_individuals[i];
-                population.reading_individuals[i].genes = population.reading_individuals[new_pos].genes;
-                population.reading_individuals[i].fitness = population.reading_individuals[new_pos].fitness;
-                population.reading_individuals[new_pos].genes = temp.genes;
-                population.reading_individuals[new_pos].fitness = temp.fitness;
+                if ( population.reading_individuals[ new_pos ].type != RANDOM_TYPE ){
+                    #pragma omp critical
+                    {
+                    Chromossome temp = population.reading_individuals[i];
+                    population.reading_individuals[i].genes = population.reading_individuals[new_pos].genes;
+                    population.reading_individuals[i].fitness = population.reading_individuals[new_pos].fitness;
+                    population.reading_individuals[new_pos].genes = temp.genes;
+                    population.reading_individuals[new_pos].fitness = temp.fitness;
 
-                temp = population.writing_individuals[i];
-                population.writing_individuals[i].genes = population.writing_individuals[new_pos].genes;
-                population.writing_individuals[i].fitness = population.writing_individuals[new_pos].fitness;
-                population.writing_individuals[new_pos].genes = temp.genes;
-                population.writing_individuals[new_pos].fitness = temp.fitness;
+                    temp = population.writing_individuals[i];
+                    population.writing_individuals[i].genes = population.writing_individuals[new_pos].genes;
+                    population.writing_individuals[i].fitness = population.writing_individuals[new_pos].fitness;
+                    population.writing_individuals[new_pos].genes = temp.genes;
+                    population.writing_individuals[new_pos].fitness = temp.fitness;
+                    }
                 }
             }
         }
@@ -410,7 +401,7 @@ void parallel_genetic_algorithm( unsigned int population_size, unsigned int indi
     end = clock();
 
     // Calculate execution time
-    double execution_time = (double)(end - start) / CLOCKS_PER_SEC;
+    double execution_time = ( (double)(end - start) / CLOCKS_PER_SEC ) / ( ( double )num_threads );
 
     // Update population statistics (e.g., best, worst, sum of fitness)
     population.best = 0;
@@ -487,8 +478,8 @@ void sequential_genetic_algorithm( unsigned int population_size, unsigned int in
                         (upper_limit - lower_limit) / 100.0
                     );
                 }
-                if (round(population.writing_individuals[i].fitness * 10000) < 
-                    round(population.reading_individuals[i].fitness * 10000)) {
+                if (round(population.writing_individuals[i].fitness * 10000000) < 
+                    round(population.reading_individuals[i].fitness * 10000000)) {
                     population.writing_individuals[i].sels++;
                     improvement = 1;
                 }
@@ -526,8 +517,8 @@ void sequential_genetic_algorithm( unsigned int population_size, unsigned int in
 
                     mutation(&population, i, generation, 2, mutation_rate, no_improvement_trials);
 
-                    if (round(population.writing_individuals[i].fitness * 10000) <
-                        round(population.reading_individuals[i].fitness * 10000)) {
+                    if (round(population.writing_individuals[i].fitness * 10000000) <
+                        round(population.reading_individuals[i].fitness * 10000000)) {
                         population.writing_individuals[i].sels++;
                         improvement = 1;
                     }

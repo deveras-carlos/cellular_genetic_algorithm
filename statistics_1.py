@@ -54,17 +54,54 @@ def salvar_csv(resultados):
             escritor.writerow(linha_filtrada)
 
 def plotar_tempos_execucao(resultados):
-    tentativas = [res['tentativas'] for res in resultados]
-    tempos = [res['tempo_execucao'] for res in resultados]
-    
-    plt.figure(figsize=(10, 5))
-    plt.bar(tentativas, tempos, color='blue')
-    plt.xlabel("Número de Tentativas")
-    plt.ylabel("Tempo de Execução (s)")
-    plt.title("Tempo de Execução por Número de Tentativas")
-    plt.xticks(tentativas)
-    plt.savefig("tempos_execucao.png")
-    plt.show()
+    funcoes = sorted(set(res['i'] for res in resultados))
+
+    for func in funcoes:
+        func_resultados = [res for res in resultados if res['i'] == func]
+        
+        # Generate plots based on the number of variables
+        variaveis_set = sorted(set(res['variaveis'] for res in func_resultados))
+        for variaveis in variaveis_set:
+            var_resultados = [res for res in func_resultados if res['variaveis'] == variaveis]
+            
+            plt.figure(figsize=(10, 5))
+            tentativas_set = sorted(set(res['tentativas'] for res in var_resultados))
+            for tentativas in tentativas_set:
+                trial_resultados = [res for res in var_resultados if res['tentativas'] == tentativas]
+                if trial_resultados:
+                    pops = [res['populacao'] for res in trial_resultados]
+                    tempos = [res['tempo_execucao'] for res in trial_resultados]
+                    plt.plot(pops, tempos, marker='o', label=f'Tentativas: {tentativas}')
+            
+            plt.xlabel("Tamanho da População")
+            plt.ylabel("Tempo de Execução (s)")
+            plt.title(f"Função {func} - Variáveis: {variaveis}")
+            plt.legend()
+            output_filename = f"tempos_execucao_func_{func}_vars_{variaveis}.png"
+            plt.savefig(output_filename)
+            plt.close()
+
+        # Generate plots based on the number of trials
+        tentativas_set = sorted(set(res['tentativas'] for res in func_resultados))
+        for tentativas in tentativas_set:
+            trial_resultados = [res for res in func_resultados if res['tentativas'] == tentativas]
+            
+            plt.figure(figsize=(10, 5))
+            variaveis_set = sorted(set(res['variaveis'] for res in trial_resultados))
+            for variaveis in variaveis_set:
+                var_resultados = [res for res in trial_resultados if res['variaveis'] == variaveis]
+                if var_resultados:
+                    pops = [res['populacao'] for res in var_resultados]
+                    tempos = [res['tempo_execucao'] for res in var_resultados]
+                    plt.plot(pops, tempos, marker='o', label=f'Variáveis: {variaveis}')
+            
+            plt.xlabel("Tamanho da População")
+            plt.ylabel("Tempo de Execução (s)")
+            plt.title(f"Função {func} - Tentativas: {tentativas}")
+            plt.legend()
+            output_filename = f"tempos_execucao_func_{func}_trials_{tentativas}.png"
+            plt.savefig(output_filename)
+            plt.close()
 
 def main():
     resultados = processar_resultados()
